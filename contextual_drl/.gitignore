@@ -1,0 +1,15 @@
+
+*.pyc
+
+*.idea/
+
+*.out
+
+*.npy
+
+.ipynb_checkpoints/*
+
+
+Locm_new-Copy1.ipynb
+
+Locm_new-Copy1.py

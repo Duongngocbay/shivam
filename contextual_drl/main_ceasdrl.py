@@ -81,3 +81,125 @@ class Agent(object):
                 break
         return sents
 
+
+def EASDRL_init(args, sess):
+    args.gui_mode = True
+    args.gui_mode2 = True
+    args.fold_id = 0
+    args.domain = 'cooking'
+    # args.contextual_embedding = 'bert'
+    args.contextual_embedding = None
+    args.replay_size = 1000
+    args.load_weights = True
+    args = args_init(args)
+
+    agent = Agent(args, sess)
+
+    if args.load_weights:
+        print('Loading weights ...')
+        # filename = 'data/online_test/%s/act/fold%d.h5' % (args.domain, args.fold_id) #to incorporate Word2vec weights
+        filename = 'weights/%s_act_%s.h5' % (args.domain, 'bert')
+        agent.net_act.load_weights(filename)
+        # filename = 'data/online_test/%s/act/fold%d.h5' % (args.domain, args.fold_id)
+        filename = 'weights/%s_arg_%s.h5' % (args.domain, 'elmo')
+        agent.net_arg.load_weights(filename)
+
+    return agent
+
+
+if __name__ == '__main__':
+    args = preset_args()
+    args.contextual_embedding = None
+    config = tf.compat.v1.ConfigProto()
+    config.gpu_options.allow_growth = True
+    set_session(tf.Session(config=config))
+    agent = EASDRL_init(args, sess='')
+    print('weights loaded ...')
+
+    input_file_path = 'data/process_manuals/'
+    input_filename = 'childsnack_domain.txt'
+    input_file_path += input_filename
+
+    #input file
+    current_sents = []
+    raw_text = open(input_file_path, 'r').read() + ' '
+    if not raw_text or len(raw_text.split()) < 2:
+        print("raw text error")
+    print(raw_text)
+    raw_text = re.split(r'\n|\r', raw_text)  # for text which has not punctuation
+    text = []
+    for t in raw_text:
+        t = re.sub(r'\(|\)|,|;|:', ' ', t)
+        for s in re.split(r'\. |\? |\! ', t):
+            if len(s) > 1:
+                if s.isupper():  # all words are upper case
+                    text.append(s[0] + s[1:].lower())
+                else:
+                    text.append(s)
+    current_sents = agent.predict(text)
+
+    #show results
+    count_act = 0
+    act2sent = {}
+    sents = current_sents
+    outfile = 'output_extracted_sequences/%s_%s_%s' % (args.domain, "bertelmo", input_filename)
+    f = open(outfile, "w")
+    output = ""
+    for i in range(len(sents)):
+        words = sents[i]['last_sent'] + sents[i]['this_sent']
+        output += '\nNO%d: ' % (i + 1)
+        f.write('\nNO%d: ' % (i + 1))
+        for j, w in enumerate(sents[i]['this_sent']):
+            f.write('%s(%d) ' % (w, j + 1))
+            output += '%s(%d) ' % (w, j + 1)
+        f.write('\n')
+        output += '\n'
+        for k, act in enumerate(sents[i]['acts']):
+            objs = []
+            for oi in act['obj_idxs'][0] + act['obj_idxs'][1]:
+                if oi >= 0:
+                    objs.append(words[oi])
+                else:
+                    objs.append('UNK')
+            act2sent[count_act] = [i, k]
+            f.write('<%d>  %s (%s)    ' % (count_act + 1, words[act['act_idx']], ', '.join(objs)))
+            output += '<%d>  %s (%s)    ' % (count_act + 1, words[act['act_idx']], ', '.join(objs))
+            count_act += 1
+        if len(sents[i]['acts']) > 0:
+            f.write('\n')
+            output += '\n'
+    f.close()
+    print(output)
+
+    # show results 2 -- in locm format.
+    count_act = 0
+    act2sent = {}
+    sents = current_sents
+    output = ""
+
+    print("===========================")
+    print()
+    for i in range(len(sents)):
+
+        words = sents[i]['last_sent'] + sents[i]['this_sent']
+
+
+        for k, act in enumerate(sents[i]['acts']):
+            objs = []
+            for oi in act['obj_idxs'][0] + act['obj_idxs'][1]:
+                if oi >= 0:
+                    objs.append(words[oi])
+                else:
+                    objs.append('UNK')
+            act2sent[count_act] = [i, k]
+            # f.write('%s (%s),' % (words[act['act_idx']], ', '.join(objs)))
+            output += '%s (%s),' % (words[act['act_idx']], ', '.join(objs))
+
+            count_act += 1
+    f.close()
+    text_file = open("./ilocm_input/" + input_filename, "w")
+    output = output.rstrip(',')
+    text_file.write(output)
+    text_file.close()
+    print(output)
+
